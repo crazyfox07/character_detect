@@ -184,6 +184,8 @@ def box_iou(b1, b2):
 
     return iou
 
+import tensorflow as tf
+
 
 def yolo_loss(args, anchors, num_classes, ignore_thresh=.5, print_loss=False):
     '''Return yolo_loss tensor
@@ -220,6 +222,7 @@ def yolo_loss(args, anchors, num_classes, ignore_thresh=.5, print_loss=False):
         pred_box = K.concatenate([pred_xy, pred_wh])
 
         # Darknet raw box to calculate loss.
+
         raw_true_xy = y_true[l][..., :2] * grid_shapes[l][::-1] - grid
         raw_true_wh = K.log(y_true[l][..., 2:4] / anchors[anchor_mask[l]] * input_shape[::-1])
         raw_true_wh = K.switch(object_mask, raw_true_wh, K.zeros_like(raw_true_wh))  # avoid log(0)=-inf
@@ -246,7 +249,7 @@ def yolo_loss(args, anchors, num_classes, ignore_thresh=.5, print_loss=False):
         wh_loss = object_mask * box_loss_scale * 0.5 * K.square(raw_true_wh - raw_pred[..., 2:4])
         confidence_loss = object_mask * K.binary_crossentropy(object_mask, raw_pred[..., 4:5], from_logits=True) + \
                           (1 - object_mask) * K.binary_crossentropy(object_mask, raw_pred[..., 4:5],
-                                                                    from_logits=True) * ignore_mask
+                                                                    from_logits=True) #  * ignore_mask
         class_loss = object_mask * K.binary_crossentropy(true_class_probs, raw_pred[..., 5:], from_logits=True)
 
         xy_loss = K.sum(xy_loss) / mf
@@ -258,7 +261,6 @@ def yolo_loss(args, anchors, num_classes, ignore_thresh=.5, print_loss=False):
             loss = tf.Print(loss, [loss, xy_loss, wh_loss, confidence_loss, class_loss, K.sum(ignore_mask)],
                             message='loss: ')
     return loss
-
 
 def create_model(input_shape, anchors, num_classes, load_pretrained=False, freeze_body=2,
                  weights_path='model_data/yolo_weights.h5'):

@@ -138,7 +138,6 @@ class YOLO(object):
         self.sess.close()
 
 
-
 def run_detect_img(yolo,img_path, out_path):
     imgs = os.listdir(path=img_path)[:10]
     for img in imgs:
@@ -158,7 +157,7 @@ def run_detect_img(yolo,img_path, out_path):
 
 
 if __name__ == '__main__':
-    img_path = os.path.join(r'D:\tmp\tmp\keras-yolo3-master','utils','img_hanzi')
-    out_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', 'detect_result')
+    img_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', 'test_img')
+    out_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', 'test_result')
     yolo = YOLO()
     run_detect_img(yolo, img_path, out_path)
