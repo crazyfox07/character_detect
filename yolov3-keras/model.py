@@ -10,7 +10,7 @@ from keras.layers import Lambda, Conv2D, BatchNormalization, LeakyReLU, ZeroPadd
 from keras.regularizers import l2
 import tensorflow as tf
 import numpy as np
-from yolov3_config import grid_shape
+from yolov3_config import grid_shape, num_layers
 from yolov3_config import img_h, img_w, img_c, anchors, classes, num_classes, num_anchors
 
 
@@ -83,9 +83,9 @@ def make_last_layers(x, num_filters, out_filters):
     return x, y
 
 
-def yolo_body(num_anchors, num_classes):
+def yolo_body(inputs, num_anchors, num_classes):
     """Create YOLO_V3 model CNN body in Keras."""
-    inputs = Input(shape=(img_h, img_w, img_c))
+
     darknet = Model(inputs, darknet_body(inputs))
     x, y1 = make_last_layers(darknet.output, 512, num_anchors * (num_classes + 5))
 
@@ -103,17 +103,20 @@ def yolo_body(num_anchors, num_classes):
     return Model(inputs=[inputs], outputs=[y1, y2, y3])
 
 
+
+
 def get_ignore_mask(y_true_boxes, y_pred_boxes,grid_shape_h, grid_shape_w):
     # true_boxes = tf.boolean_mask(y_true_boxes, object_mask[0])
     # true_boxes[..., 0:2] = true_boxes[..., 0:2] * grid_shape_index[::-1]
     batch_size = 32
     layer = grid_shape_h // 26
-    result = tf.zeros(shape=(batch_size , grid_shape_h, grid_shape_w, 3, 1))
+    result = tf.zeros(shape=(batch_size, grid_shape_h, grid_shape_w, 3, 1))
     for b in range(batch_size):
         # m = tf.shape(b_true_boxes_indexes)[0]
         true_boxes = tf.boolean_mask(y_true_boxes[b], y_true_boxes[b, ..., 4]>0)
-        true_boxes[..., 0] = (true_boxes[..., 0] + grid_shape_w) * grid_shape_w
-        true_boxes[..., 1] = (true_boxes[..., 1] + grid_shape_h) * grid_shape_h
+        true_boxes_x_index = true_boxes[..., 0] // grid_shape_w
+        true_boxes_y_index = true_boxes[..., 1] // grid_shape_h
+
         true_boxes[..., 2] = tf.exp(true_boxes[..., 2]) #* anchors_arr[layer, anchor_index]
         true_boxes[..., 3] = tf.exp(true_boxes[..., 3])# * grid_shape_w
 
@@ -140,7 +143,29 @@ def get_ignore_mask(y_true_boxes, y_pred_boxes,grid_shape_h, grid_shape_w):
     return result
 
 
-def yolo_loss(y_true, y_pred):
+def create_model(num_anchors, num_classes):
+    img_input = Input(shape=(img_h, img_w, img_c))
+    model_body = yolo_body(img_input, num_anchors, num_classes)
+
+    y_true = [Input(shape=(shape[0], shape[1], num_anchors, 5 + num_classes)) for shape in grid_shape]
+
+    loss_layer = Lambda(function=yolo_loss, output_shape=(1,), name='yolo-loss')([*model_body.output, *y_true])
+    new_model = Model(inputs=[model_body.input, *y_true], outputs=[loss_layer])
+    return new_model
+
+
+def yolo_loss(args):
+    y_pred = args[: num_layers]
+    y_true = args[num_layers:]
+    loss = 0
+    for layer in range(num_layers):
+        grid_shape_h, grid_shape_w = grid_shape[layer]
+        y_true_xy = y_true[layer][..., 0:2]
+
+
+
+
+
     batch_size, grid_shape_h, grid_shape_w = K.shape(y_pred)[0], K.shape(y_pred)[1], K.shape(y_pred)[2]  # batch size, tensor
     # batch_size = K.cast(batch_size, K.dtype(y_pred[0]))
     loss = 0

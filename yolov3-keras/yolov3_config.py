@@ -15,8 +15,12 @@ classes = {'diningtable': 0, 'motorbike': 1, 'train': 2, 'sofa': 3, 'aeroplane':
            'pottedplant': 7, 'bicycle': 8, 'bird': 9, 'horse': 10, 'chair': 11, 'tvmonitor': 12, 'car': 13,
            'bus': 14, 'bottle': 15, 'cow': 16, 'person': 17, 'cat': 18, 'dog': 19}
 num_classes = 20
-anchors = [(202, 199), (190, 109), (133, 194), (114, 129), (93, 68), (69, 175), (48, 114), (34, 63), (18, 24)]
-num_anchors = len(anchors) // 3
+
+anchors = [[(202, 199), (190, 109), (133, 194)],
+           [(114, 129), (93, 68), (69, 175)],
+           [(48, 114), (34, 63), (18, 24)]]
+num_anchors_per_layer = 3
+num_layers = len(anchors) // num_anchors_per_layer
 grid_shape = [(13, 13), (26, 26), (52, 52)]
 boxes_max_num = 20
 train_num = 17125
