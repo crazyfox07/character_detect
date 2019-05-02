@@ -4,19 +4,23 @@
 # @File    : train.py
 from keras.optimizers import Adam
 from keras.callbacks import TensorBoard, ModelCheckpoint
-from model import yolo_body, yolo_loss
+from model import create_model
 from utils import data_generate
-from yolov3_config import num_anchors, num_classes, batch_size, train_num, log_dir
+from yolov3_config import num_classes, batch_size, train_num, log_dir, num_anchors_per_layer
 import os
+import tensorflow as tf
+
 
 def train_model():
+    tf.logging.set_verbosity(tf.logging.INFO)
     logging = TensorBoard(log_dir=log_dir)
     checkpoint = ModelCheckpoint(log_dir + 'ep{epoch:03d}-loss{loss:.3f}-val_loss{val_loss:.3f}.h5',
                                  monitor='val_loss', save_weights_only=True, save_best_only=True, period=3)
-    model = yolo_body(num_anchors, num_classes)
+    model = create_model(num_anchors_per_layer, num_classes)
+    model.summary()
 
     model.compile(optimizer=Adam(lr=1e-3),
-                  loss=[yolo_loss] * 3)
+                  loss={'yolo-loss': lambda y_true, y_pred: y_pred})  # use custom yolo_loss Lambda layer.
 
     model.fit_generator(generator=data_generate(batch_size=batch_size),
                         steps_per_epoch=train_num // batch_size,

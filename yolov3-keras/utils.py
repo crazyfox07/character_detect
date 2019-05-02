@@ -67,20 +67,20 @@ def data_generate(batch_size=64):
             for y_true_box in y_true_boxes:
                 class_index, iou_max_index, x, y, w, h = y_true_box
                 # print(class_index, iou_max_index, x, y, w, h)
-                grid_shape_index = iou_max_index // 3
+                layer = iou_max_index // 3
                 anchor_index = iou_max_index % 3
-                grid_shape_h, grid_shape_w = grid_shape[grid_shape_index]
+                grid_shape_h, grid_shape_w = grid_shape[layer]
                 grid_h = int(y / img_h * grid_shape_h)
                 grid_w = int(x / img_w * grid_shape_w)
 
                 tx = x / img_w * grid_shape_w - grid_w
                 ty = y / img_h * grid_shape_h - grid_h
-                tw = np.log(w / anchors[grid_shape_index][anchor_index][0])
-                th = np.log(w / anchors[grid_shape_index][anchor_index][1])
+                tw = np.log(w / anchors[layer][anchor_index][0])
+                th = np.log(w / anchors[layer][anchor_index][1])
 
-                y_true[grid_shape_index][i, grid_h, grid_w, anchor_index, :4] = np.array([x, y, tw, th])
-                y_true[grid_shape_index][i, grid_h, grid_w, anchor_index, 4] = 1
-                y_true[grid_shape_index][i, grid_h, grid_w, anchor_index, 5 + class_index] = 1
+                y_true[layer][i, grid_h, grid_w, anchor_index, :4] = np.array([tx, ty, tw, th])
+                y_true[layer][i, grid_h, grid_w, anchor_index, 4] = 1
+                y_true[layer][i, grid_h, grid_w, anchor_index, 5 + class_index] = 1
             count = count + 1
             if count == lines_len:
                 shuffle(lines)

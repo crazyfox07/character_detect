@@ -20,11 +20,12 @@ anchors = [[(202, 199), (190, 109), (133, 194)],
            [(114, 129), (93, 68), (69, 175)],
            [(48, 114), (34, 63), (18, 24)]]
 num_anchors_per_layer = 3
-num_layers = len(anchors) // num_anchors_per_layer
+num_layers = len(anchors)
 grid_shape = [(13, 13), (26, 26), (52, 52)]
 boxes_max_num = 20
 train_num = 17125
-batch_size = 32
+batch_size = 8
 log_dir = os.path.join(current_dir, 'logs')
 os.makedirs(log_dir, exist_ok=True)
 model_name = 'trained_weights_stage_1.h5'
+threshold = 0.5
