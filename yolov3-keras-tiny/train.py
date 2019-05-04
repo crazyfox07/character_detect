@@ -9,13 +9,14 @@ from utils import data_generate
 from yolov3_config import num_classes, batch_size, train_num, log_dir, num_anchors_per_layer, model_name
 import os
 import tensorflow as tf
-
+import subprocess
 
 def train_model():
+    subprocess.call('rm -rf {}/*'.format(log_dir), shell=True)
     tf.logging.set_verbosity(tf.logging.INFO)
     logging = TensorBoard(log_dir=log_dir)
-    checkpoint = ModelCheckpoint(log_dir + 'ep{epoch:03d}-loss{loss:.3f}-val_loss{val_loss:.3f}.h5',
-                                 monitor='val_loss', save_weights_only=True, save_best_only=True, period=3)
+    checkpoint = ModelCheckpoint(log_dir + 'ep{epoch:03d}-loss{loss:.3f}-val_loss{val-loss:.3f}.h5',
+                                 monitor='val-loss', save_weights_only=True, save_best_only=True, period=3)
     model = create_model(num_anchors_per_layer, num_classes)
     model.summary()
 
@@ -24,7 +25,7 @@ def train_model():
 
     model.fit_generator(generator=data_generate(batch_size=batch_size),
                         steps_per_epoch=train_num // batch_size,
-                        epochs=2,
+                        epochs=10,
                         initial_epoch=0,
                         callbacks=[logging])
     model.save_weights(os.path.join(log_dir, model_name))

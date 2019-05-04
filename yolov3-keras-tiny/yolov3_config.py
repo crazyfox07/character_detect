@@ -25,15 +25,14 @@ classes = {'diningtable': 0, 'motorbike': 1, 'train': 2, 'sofa': 3, 'aeroplane':
            'bus': 14, 'bottle': 15, 'cow': 16, 'person': 17, 'cat': 18, 'dog': 19}
 num_classes = 1
 
-anchors = [[[376, 370], [249, 361], [354, 203]],
-           [[212, 241], [129, 326], [174, 128]],
-           [[89, 214], [64, 118], [33, 46]]]
+anchors = [[[362, 360], [195, 347], [294, 190]],
+           [[114, 250], [93, 138], [37, 54]]]
 num_anchors_per_layer = 3
 num_layers = len(anchors)
-grid_shape = [(13, 13), (26, 26), (52, 52)]
+grid_shape = [(13, 13), (26, 26)]
 boxes_max_num = 20
 train_num = 17125
-batch_size = 16
+batch_size = 64
 
-model_name = 'trained_weights_stage_1.h5'
+model_name = 'trained_weights_stage_2.h5'
 threshold = 0.5

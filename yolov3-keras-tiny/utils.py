@@ -76,7 +76,6 @@ def data_generate(batch_size=64):
                 ty = y / img_h * grid_shape_h - grid_h
                 tw = np.log(w / anchors[layer][anchor_index][0])
                 th = np.log(w / anchors[layer][anchor_index][1])
-
                 y_true[layer][i, grid_h, grid_w, anchor_index, :4] = np.array([tx, ty, tw, th])
                 y_true[layer][i, grid_h, grid_w, anchor_index, 4] = 1
                 class_index = 0
@@ -85,14 +84,7 @@ def data_generate(batch_size=64):
             if count == lines_len:
                 shuffle(lines)
                 count = 0
-        # print('time use: {}'.format(time.time() - begin))
-        # with tf.Session() as sess:
-        #     boxes = tf.boolean_mask(y_true[0][...,:5], y_true[0][..., 4])
-        #     a = sess.run(boxes)
-        #     m = K.shape(boxes)
-        #     mf = K.cast(m, K.dtype(boxes))
-        #     print(a)
-        # y_true_reshape = [np.reshape(item, newshape=[batch_size, item.shape[1], item.shape[2], -1]) for item in y_true]
+
         yield [x_img, *y_true], np.zeros(batch_size)
 
 
@@ -103,9 +95,8 @@ if __name__ == '__main__':
     # handle_img(img_path)
 
     data_gen = data_generate(batch_size=2)
-    step =1
+    step = 1
     for item in data_gen:
-        print(item)
         step += 1
         if step == 3:
             break

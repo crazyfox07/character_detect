@@ -5,7 +5,8 @@
 from functools import reduce, wraps
 from keras import backend as K, Model
 from keras import Input
-from keras.layers import Lambda, Conv2D, BatchNormalization, LeakyReLU, ZeroPadding2D, Add, UpSampling2D, Concatenate
+from keras.layers import Lambda, Conv2D, BatchNormalization, LeakyReLU, ZeroPadding2D, Add, UpSampling2D, Concatenate, \
+    MaxPooling2D
 from keras.regularizers import l2
 import tensorflow as tf
 import numpy as np
@@ -82,24 +83,37 @@ def make_last_layers(x, num_filters, out_filters):
     return x, y
 
 
-def yolo_body(inputs, num_anchors, num_classes):
-    """Create YOLO_V3 model CNN body in Keras."""
+def tiny_yolo_body(inputs, num_anchors, num_classes):
+    '''Create Tiny YOLO_v3 model CNN body in keras.'''
+    x1 = compose(
+        DarknetConv2D_BN_Leaky(16, (3, 3)),
+        MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'),
+        DarknetConv2D_BN_Leaky(32, (3, 3)),
+        MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'),
+        DarknetConv2D_BN_Leaky(64, (3, 3)),
+        MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'),
+        DarknetConv2D_BN_Leaky(128, (3, 3)),
+        MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'),
+        DarknetConv2D_BN_Leaky(256, (3, 3)))(inputs)
+    x2 = compose(
+        MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='same'),
+        DarknetConv2D_BN_Leaky(512, (3, 3)),
+        MaxPooling2D(pool_size=(2, 2), strides=(1, 1), padding='same'),
+        DarknetConv2D_BN_Leaky(1024, (3, 3)),
+        DarknetConv2D_BN_Leaky(256, (1, 1)))(x1)
+    y1 = compose(
+        DarknetConv2D_BN_Leaky(512, (3, 3)),
+        DarknetConv2D(num_anchors * (num_classes + 5), (1, 1)))(x2)
 
-    darknet = Model(inputs, darknet_body(inputs))
-    x, y1 = make_last_layers(darknet.output, 512, num_anchors * (num_classes + 5))
-
-    x = compose(
-        DarknetConv2D_BN_Leaky(256, (1, 1)),
-        UpSampling2D(2))(x)
-    x = Concatenate()([x, darknet.layers[152].output])
-    x, y2 = make_last_layers(x, 256, num_anchors * (num_classes + 5))
-
-    x = compose(
+    x2 = compose(
         DarknetConv2D_BN_Leaky(128, (1, 1)),
-        UpSampling2D(2))(x)
-    x = Concatenate()([x, darknet.layers[92].output])
-    x, y3 = make_last_layers(x, 128, num_anchors * (num_classes + 5))
-    return Model(inputs=[inputs], outputs=[y1, y2, y3])
+        UpSampling2D(2))(x2)
+    y2 = compose(
+        Concatenate(),
+        DarknetConv2D_BN_Leaky(256, (3, 3)),
+        DarknetConv2D(num_anchors * (num_classes + 5), (1, 1)))([x2, x1])
+
+    return Model(inputs, [y1, y2])
 
 
 def xywh_to_raw(xywh, grid_shape_h, grid_shape_w, layer):
@@ -149,8 +163,8 @@ def get_ignore_mask(y_true_xywh, y_pred_xywh, object_mask, grid_shape_h, grid_sh
 
 def create_model(num_anchors, num_classes):
     img_input = Input(shape=(img_h, img_w, img_c))
-    model_body = yolo_body(img_input, num_anchors, num_classes)
-
+    model_body = tiny_yolo_body(img_input, num_anchors, num_classes)
+    # model_body = yolo_body(img_input, num_anchors, num_classes)
     y_true = [Input(shape=(shape[0], shape[1], num_anchors, 5 + num_classes)) for shape in grid_shape]
 
     loss_layer = Lambda(function=yolo_loss, output_shape=(1,), name='yolo-loss')([*model_body.output, *y_true])
@@ -168,8 +182,9 @@ def yolo_loss(args):
         y_true_wh = y_true[layer][..., 2:4]
         object_mask = y_true[layer][..., 4:5]
 
-        y_pred_reshape = tf.reshape(y_pred[layer], shape=(-1, grid_shape_h, grid_shape_w, num_anchors_per_layer, 5+num_classes))
-        y_pred_xy =tf.sigmoid(y_pred_reshape[..., 0:2])
+        y_pred_reshape = tf.reshape(y_pred[layer],
+                                    shape=(-1, grid_shape_h, grid_shape_w, num_anchors_per_layer, 5 + num_classes))
+        y_pred_xy = tf.sigmoid(y_pred_reshape[..., 0:2])
         y_pred_wh = y_pred_reshape[..., 2:4]
         y_pred_xywh = tf.concat([y_pred_xy, y_pred_wh], axis=-1)
 
@@ -177,28 +192,31 @@ def yolo_loss(args):
         y_pred_class = tf.sigmoid(y_pred_reshape[..., 5:])
 
         # 加入ignore_mask主要是为了平衡正负样本的比例，一张图中object的数量相对背景的数量太少了
-        ignore_mask = get_ignore_mask(y_true[layer][..., 0: 4], y_pred_xywh, object_mask, grid_shape_h, grid_shape_w, layer)
-        box_loss_scale = 2 - y_true_wh[..., 0:1] * y_true_wh[..., 1:2]
-        xy_loss = object_mask * box_loss_scale * K.binary_crossentropy(y_true_xy, y_pred_xy, from_logits=True)
-        wh_loss = object_mask * box_loss_scale * 0.5 * K.square(y_true_wh - y_pred_wh)
-        confidence_loss = object_mask * K.binary_crossentropy(object_mask, y_pred_confidence, from_logits=True) + \
-                          (1 - object_mask) * ignore_mask * K.binary_crossentropy(object_mask, y_pred_confidence,
-                                                                                  from_logits=True)
-        class_loss = object_mask * K.binary_crossentropy(y_true[layer][..., 5:], y_pred_class, from_logits=True)
+        ignore_mask = get_ignore_mask(y_true[layer][..., 0: 4], y_pred_xywh, object_mask, grid_shape_h, grid_shape_w,
+                                      layer)
+        # box_loss_scale = 2 - tf.exp(y_true_wh[..., 0:1]) * tf.exp(y_true_wh[..., 1:2])
+        # xy_loss = object_mask * K.binary_crossentropy(y_true_xy, y_pred_xy, from_logits=True)
+        xy_loss = object_mask * K.square(y_true_xy - y_pred_xy)
+        wh_loss = object_mask * K.square(y_true_wh - y_pred_wh)
+        # confidence_loss = object_mask * K.binary_crossentropy(object_mask, y_pred_confidence, from_logits=True) + \
+        #                   (1 - object_mask) * K.binary_crossentropy(object_mask, y_pred_confidence, from_logits=True) *ignore_mask
+        confidence_loss = object_mask * K.square(object_mask - y_pred_confidence) + (1 - object_mask) * K.square(
+            object_mask - y_pred_confidence) * ignore_mask
+        # class_loss = object_mask * K.binary_crossentropy(y_true[layer][..., 5:],y_pred_class, from_logits=True)
+        class_loss = object_mask * K.square(y_true[layer][..., 5:] - y_pred_class)
 
         xy_loss = tf.reduce_sum(xy_loss) / batch_size
         wh_loss = tf.reduce_sum(wh_loss) / batch_size
         confidence_loss = tf.reduce_sum(confidence_loss) / batch_size
         class_loss = tf.reduce_sum(class_loss) / batch_size
 
-        loss = loss + xy_loss + wh_loss + confidence_loss + class_loss
+        loss = loss + xy_loss + wh_loss + confidence_loss
     return loss
 
 
-
-
 if __name__ == '__main__':
-    num_classes = len(classes)
-    inp = Input(shape=(img_h, img_w, img_c))
-    model = yolo_body(num_anchors_per_layer, num_classes)
-    model.summary()
+    pass
+    # num_classes = len(classes)
+    # inp = Input(shape=(img_h, img_w, img_c))
+    # model = tiny_yolo_body(num_anchors_per_layer, num_classes)
+    # model.summary()
